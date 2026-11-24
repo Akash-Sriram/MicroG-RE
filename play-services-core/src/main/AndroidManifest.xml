@@ -1716,13 +1716,22 @@
                 <action android:name="${basePackageName}.android.mdd.service.START" />
                 <action android:name="${basePackageName}.android.mdh.service.START" />
                 <action android:name="${basePackageName}.android.mdh.service.listener.START" />
-                <action android:name="${basePackageName}.android.mobstore.service.START" />
 
                 <action
                     android:name="${basePackageName}.android.gms.wearable.BIND_LISTENER"
                     tools:ignore="WearableBindListener" />
             </intent-filter>
         </service>
+
+        <!-- // RE changes start -->
+        <service
+            android:name="org.microg.gms.mobstore.MobStoreFileService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="${basePackageName}.android.mobstore.service.START" />
+            </intent-filter>
+        </service>
+        <!-- // RE changes end -->
 
         <meta-data
             android:name="org.microg.gms.settings.checkin_enable_service"
