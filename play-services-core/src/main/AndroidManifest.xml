@@ -1731,6 +1731,15 @@
                 <action android:name="${basePackageName}.android.mobstore.service.START" />
             </intent-filter>
         </service>
+
+        <service
+            android:name="org.microg.gms.mdisync.MdiSyncService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.gms.mdisync.service.START" />
+                <action android:name="${basePackageName}.android.mdisync.service.START" />
+            </intent-filter>
+        </service>
         <!-- // RE changes end -->
 
         <meta-data
