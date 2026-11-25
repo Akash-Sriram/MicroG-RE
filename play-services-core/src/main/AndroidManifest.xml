@@ -1713,7 +1713,6 @@
                 <action android:name="${basePackageName}.android.gms.wearable.BIND" />
                 <action android:name="${basePackageName}.android.gms.wearable.DATA_CHANGED" />
                 <action android:name="${basePackageName}.android.gms.wearable.NODE_CHANGED" />
-                <action android:name="${basePackageName}.android.mdd.service.START" />
                 <action android:name="${basePackageName}.android.mdh.service.START" />
                 <action android:name="${basePackageName}.android.mdh.service.listener.START" />
 
@@ -1725,9 +1724,19 @@
 
         <!-- // RE changes start -->
         <service
+            android:name="org.microg.gms.mdd.MobileDataDownloadService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.mdd.service.START" />
+                <action android:name="${basePackageName}.android.mdd.service.START" />
+            </intent-filter>
+        </service>
+
+        <service
             android:name="org.microg.gms.mobstore.MobStoreFileService"
             android:exported="true">
             <intent-filter>
+                <action android:name="com.google.android.mobstore.service.START" />
                 <action android:name="${basePackageName}.android.mobstore.service.START" />
             </intent-filter>
         </service>
