@@ -2309,6 +2309,18 @@ internal class PhenotypeDatabase(private val storageContext: Context) : SQLiteOp
             android.net.Uri.Builder().scheme("content").authority(PHENOTYPE_CONTENT_AUTHORITY)
                 .appendPath(packageName).build(), null
         )
+        val updateIntent = Intent("com.google.android.gms.phenotype.UPDATE")
+            .putExtra("com.google.android.gms.phenotype.PACKAGE_NAME", packageName)
+        try {
+            val receivers = context.packageManager.queryBroadcastReceivers(updateIntent, 0)
+            for (receiver in receivers) {
+                val pkg = receiver.activityInfo?.packageName ?: continue
+                val explicitIntent = Intent(updateIntent).setPackage(pkg)
+                context.sendBroadcast(explicitIntent)
+            }
+        } catch (e: Exception) {
+            Log.w(PHENOTYPE_LOG_TAG, "Failed to send Phenotype UPDATE broadcast", e)
+        }
         for (target in listOf("com.google.android.apps.internal.mobdog", "com.google.android.apps.mobileutilities")) {
             try {
                 context.packageManager.getApplicationInfo(target, 0)
