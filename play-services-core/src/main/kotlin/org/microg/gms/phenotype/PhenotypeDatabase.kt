@@ -2309,11 +2309,12 @@ internal class PhenotypeDatabase(private val storageContext: Context) : SQLiteOp
             android.net.Uri.Builder().scheme("content").authority(PHENOTYPE_CONTENT_AUTHORITY)
                 .appendPath(packageName).build(), null
         )
-        val targetPkg = unresolvePackageName(packageName)
         val updateIntent = Intent("com.google.android.gms.phenotype.UPDATE")
             .putExtra("com.google.android.gms.phenotype.PACKAGE_NAME", packageName)
         try {
-            context.sendBroadcast(Intent(updateIntent).setPackage(targetPkg))
+            for (target in unresolveTargetGooglePackage(packageName)) {
+                context.sendBroadcast(Intent(updateIntent).setPackage(target))
+            }
             val receivers = context.packageManager.queryBroadcastReceivers(updateIntent, 0)
             for (receiver in receivers) {
                 val pkg = receiver.activityInfo?.packageName ?: continue

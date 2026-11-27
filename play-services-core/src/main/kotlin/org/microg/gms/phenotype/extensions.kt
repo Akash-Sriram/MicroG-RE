@@ -146,6 +146,29 @@ internal fun resolveTargetGooglePackage(packageName: String, context: Context? =
     }
     return packageName
 }
+
+internal fun unresolveTargetGooglePackage(googlePackage: String): List<String> {
+    val candidates = linkedSetOf<String>()
+    if (googlePackage == "com.google.android.apps.photos") {
+        candidates.add("app.morphe.android.apps.photos")
+        candidates.add("app.revanced.android.apps.photos")
+    } else if (googlePackage == "com.google.android.youtube") {
+        candidates.add("app.morphe.android.youtube")
+        candidates.add("app.revanced.android.youtube")
+    } else if (googlePackage == "com.google.android.apps.youtube.music") {
+        candidates.add("app.morphe.android.apps.youtube.music")
+        candidates.add("app.revanced.android.apps.youtube.music")
+    } else if (googlePackage == "com.android.vending") {
+        candidates.add("app.morphe.android.vending")
+        candidates.add("app.revanced.android.vending")
+    }
+    if (googlePackage.startsWith("com.google.")) {
+        candidates.add(googlePackage.replaceFirst("com.google.", "app.morphe."))
+        candidates.add(googlePackage.replaceFirst("com.google.", "app.revanced."))
+    }
+    candidates.add(googlePackage)
+    return candidates.toList()
+}
 // RE changes end
 
 internal fun Context.assertPhenotypeNamespaceAccess(

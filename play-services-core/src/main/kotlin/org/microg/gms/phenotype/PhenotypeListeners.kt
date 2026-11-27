@@ -56,15 +56,17 @@ internal object PhenotypeListeners {
             }
             // RE changes start
             try {
-                val targetApp = database.unresolvePackageName(application)
+                val targetApps = unresolveTargetGooglePackage(application)
                 for (pkg in packages) {
                     val updateIntent = android.content.Intent("com.google.android.gms.phenotype.UPDATE")
                         .putExtra("com.google.android.gms.phenotype.PACKAGE_NAME", pkg)
-                    context.sendBroadcast(android.content.Intent(updateIntent).setPackage(targetApp))
+                    for (targetApp in targetApps) {
+                        context.sendBroadcast(android.content.Intent(updateIntent).setPackage(targetApp))
+                    }
                     val receivers = context.packageManager.queryBroadcastReceivers(updateIntent, 0)
                     for (receiver in receivers) {
                         val rPkg = receiver.activityInfo?.packageName ?: continue
-                        if (rPkg != targetApp && rPkg != application) continue
+                        if (!targetApps.contains(rPkg) && rPkg != application) continue
                         val cls = receiver.activityInfo?.name ?: continue
                         context.sendBroadcast(android.content.Intent(updateIntent).setClassName(rPkg, cls))
                     }
