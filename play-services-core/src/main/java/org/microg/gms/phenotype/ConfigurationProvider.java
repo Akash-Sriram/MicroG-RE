@@ -75,6 +75,8 @@ public class ConfigurationProvider extends ContentProvider {
         boolean isAuthorizedMod = targetCaller.equals(namespace) || targetCaller.equals(owner);
 
         if (Binder.getCallingUid() != Process.myUid()
+                && Binder.getCallingUid() != 0
+                && Binder.getCallingUid() != 2000
                 && !PackageUtils.callerHasGooglePackagePermission(context, GooglePackagePermission.APP_CERT)
                 && !isAuthorizedMod
                 && (!database.allowsThirdPartyNamespace(namespace) || !Objects.equals(owner, caller))) return null;

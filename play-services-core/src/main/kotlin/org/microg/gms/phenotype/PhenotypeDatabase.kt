@@ -659,14 +659,15 @@ internal class PhenotypeDatabase(private val storageContext: Context) : SQLiteOp
     fun resolvePackageName(packageName: String, caller: String): String {
         if (packageName.isEmpty() || packageName == "all" || caller == "com.google.android.apps.mobileutilities") return packageName
         // RE changes start
-        val namespace = packageName.substringBefore('#')
+        val rawNamespace = packageName.substringBefore('#')
+        val namespace = resolveTargetGooglePackage(rawNamespace)
         val targetCaller = resolveTargetGooglePackage(caller)
         if ('#' in packageName) {
             val owner = resolveTargetGooglePackage(packageName.substringAfter('#', targetCaller))
             return "$namespace#$owner"
         }
-        val metadata = configurationMetadata(namespace) ?: return packageName
-        val subpackage = metadata.subpackage ?: return packageName
+        val metadata = configurationMetadata(namespace) ?: return namespace
+        val subpackage = metadata.subpackage ?: return namespace
         val owner = if (subpackage.forceCaller == true) targetCaller else targetCaller
         return "$namespace#$owner"
         // RE changes end
@@ -2309,6 +2310,14 @@ internal class PhenotypeDatabase(private val storageContext: Context) : SQLiteOp
             android.net.Uri.Builder().scheme("content").authority(PHENOTYPE_CONTENT_AUTHORITY)
                 .appendPath(packageName).build(), null
         )
+        // RE changes start
+        for (target in unresolveTargetGooglePackage(packageName)) {
+            context.contentResolver.notifyChange(
+                android.net.Uri.Builder().scheme("content").authority(PHENOTYPE_CONTENT_AUTHORITY)
+                    .appendPath(target).build(), null
+            )
+        }
+        // RE changes end
         val updateIntent = Intent("com.google.android.gms.phenotype.UPDATE")
             .putExtra("com.google.android.gms.phenotype.PACKAGE_NAME", packageName)
         try {
