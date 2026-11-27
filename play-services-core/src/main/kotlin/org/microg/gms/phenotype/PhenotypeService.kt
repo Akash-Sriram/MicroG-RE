@@ -497,6 +497,17 @@ internal class PhenotypeServiceImpl(
 
     override fun onTransact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean {
         Log.d(PHENOTYPE_LOG_TAG, "onTransact: code=$code, callingUid=${Binder.getCallingUid()}, callingPackage=$callingPackage")
+        if (code == 31) {
+            try {
+                data.enforceInterface("com.google.android.gms.phenotype.internal.IPhenotypeService")
+                val callbacks = IPhenotypeCallbacks.Stub.asInterface(data.readStrongBinder())
+                val properties = data.createByteArray()
+                commitToConfigurationWithProperties(callbacks, properties)
+                return true
+            } catch (e: Exception) {
+                Log.w(PHENOTYPE_LOG_TAG, "Failed to handle code 31 transaction", e)
+            }
+        }
         return warnOnTransactionIssues(code, reply, flags, PHENOTYPE_LOG_TAG) { super.onTransact(code, data, reply, flags) }
     }
 }

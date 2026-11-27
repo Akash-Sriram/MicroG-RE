@@ -1,0 +1,44 @@
+name: "Test Build Debug"
+on:
+  push:
+    branches:
+      - feat/phenotype
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: "Build Debug APK"
+    runs-on: ubuntu-latest
+    env:
+      GRADLE_MICROG_VERSION_WITHOUT_GIT: 1
+
+    steps:
+      - name: "Free disk space"
+        run: |
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /opt/hostedtoolcache/go
+          df -h
+
+      - name: "Checkout sources"
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: "Setup Java"
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: "Setup Gradle"
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: "Execute Gradle assembleDebug"
+        run: ./gradlew assembleDebug
+
+      - name: "Upload APK artifacts"
+        uses: actions/upload-artifact@v4
+        with:
+          name: microg-debug-apk
+          path: play-services-core/build/outputs/apk/*/*/*.apk
+          if-no-files-found: error

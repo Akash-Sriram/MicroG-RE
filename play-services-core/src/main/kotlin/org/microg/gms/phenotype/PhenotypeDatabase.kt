@@ -1322,21 +1322,44 @@ internal class PhenotypeDatabase(private val storageContext: Context) : SQLiteOp
         }
     }
 
-    fun getCommittedConfiguration(packageName: String): Configurations? {
+    fun getMddBridgedFlags(packageName: String): List<Flag> {
+        val mddPackage = "com.google.android.gms.icing.mdd#$packageName"
+        // Safely bridge MDD FileGroup extension blobs and configs while skipping the 8,300+ legacy ClearCut booleans
+        val selection = "$COL_PACKAGE_NAME = ? AND ($COL_EXTENSION_VAL IS NOT NULL OR $COL_STRING_VAL IS NOT NULL OR $COL_NAME LIKE 'Mdd__%')"
+        return readFlags(TABLE_FLAGS, selection, arrayOf(mddPackage), "$COL_COMMITTED ASC, $COL_VERSION ASC, $COL_NAME ASC")
+    }
+
+    fun getCommittedConfiguration(packageName: String, user: String = ""): Configurations? {
         val db = readableDatabase
         val ownsTransaction = !db.inTransaction()
         if (ownsTransaction) db.beginTransaction()
         try {
             if (!packageExists(packageName)) return null
-            val selection = "$COL_PACKAGE_NAME = ? AND $COL_COMMITTED = 1"
-            val args = arrayOf(packageName)
-            val overrides = readFlags(TABLE_FLAG_OVERRIDES, selection, args)
-            val flags = mergeFlags(readFlags(TABLE_FLAGS, selection, args), overrides)
+            val baseSelection = "$COL_PACKAGE_NAME = ? AND $COL_USER = '' AND $COL_COMMITTED = 1"
+            val userSelection = "$COL_PACKAGE_NAME = ? AND $COL_USER = ? AND $COL_COMMITTED = 1"
+            val baseArgs = arrayOf(packageName)
+            val userArgs = arrayOf(packageName, user)
+
+            val baseOverrides = readFlags(TABLE_FLAG_OVERRIDES, baseSelection, baseArgs)
+            val userOverrides = if (user.isNotEmpty()) readFlags(TABLE_FLAG_OVERRIDES, userSelection, userArgs) else emptyList()
+            val overrides = baseOverrides + userOverrides
+
+            val baseFlags = readFlags(TABLE_FLAGS, baseSelection, baseArgs)
+            val userFlags = if (user.isNotEmpty()) readFlags(TABLE_FLAGS, userSelection, userArgs) else emptyList()
+            val mddFlags = getMddBridgedFlags(packageName)
+
+            val flags = mergeFlags(baseFlags + userFlags + mddFlags, overrides)
+
+            val tokenSelection = if (user.isNotEmpty()) "$COL_PACKAGE_NAME = ? AND ($COL_USER = ? OR $COL_USER = '') AND $COL_IS_COMMITTED = 1"
+            else "$COL_PACKAGE_NAME = ? AND $COL_IS_COMMITTED = 1"
+            val tokenArgs = if (user.isNotEmpty()) arrayOf(packageName, user) else arrayOf(packageName)
+            val tokenOrderBy = if (user.isNotEmpty()) "CASE WHEN $COL_USER = '' THEN 1 ELSE 0 END" else null
+
             val token = db.query(
                 TABLE_EXPERIMENT_TOKENS,
                 arrayOf(COL_EXPERIMENT_TOKEN, COL_SERVER_TOKEN, COL_SERVING_VERSION),
-                "$COL_PACKAGE_NAME = ? AND $COL_IS_COMMITTED = 1", args,
-                null, null, null, "1"
+                tokenSelection, tokenArgs,
+                null, null, tokenOrderBy, "1"
             ).use { cursor ->
                 if (!cursor.moveToFirst()) null else TokenInfo(
                     if (cursor.isNull(0)) null else cursor.getBlob(0),
@@ -2046,19 +2069,31 @@ internal class PhenotypeDatabase(private val storageContext: Context) : SQLiteOp
                 parsed
             }
             val packageName = token.target
-            val args = arrayOf(packageName, token.version.toString(), token.user)
             val overrides = getFlagOverrides(packageName, token.user)
-            db.delete(TABLE_FLAGS, "$COL_PACKAGE_NAME = ? AND $COL_COMMITTED = 1", arrayOf(packageName))
-            db.execSQL(
-                """
-                INSERT OR REPLACE INTO $TABLE_FLAGS ($COL_PACKAGE_NAME, $COL_VERSION, $COL_FLAG_TYPE, $COL_PARTITION_ID,
-                    $COL_USER, $COL_NAME, $COL_INT_VAL, $COL_BOOL_VAL, $COL_FLOAT_VAL, $COL_STRING_VAL, $COL_EXTENSION_VAL, $COL_COMMITTED)
-                SELECT $COL_PACKAGE_NAME, $COL_VERSION, $COL_FLAG_TYPE, $COL_PARTITION_ID,
-                    $COL_USER, $COL_NAME, $COL_INT_VAL, $COL_BOOL_VAL, $COL_FLOAT_VAL, $COL_STRING_VAL, $COL_EXTENSION_VAL, 1
-                FROM $TABLE_FLAGS WHERE $COL_PACKAGE_NAME = ? AND $COL_VERSION = ? AND ($COL_USER = ? OR $COL_USER = '') AND $COL_COMMITTED = 0
-            """.trimIndent(), args
-            )
-            db.delete(TABLE_FLAG_OVERRIDES, "$COL_PACKAGE_NAME = ? AND $COL_COMMITTED = 1", arrayOf(packageName))
+            if (token.user.isEmpty()) {
+                db.delete(TABLE_FLAGS, "$COL_PACKAGE_NAME = ? AND $COL_USER = '' AND $COL_COMMITTED = 1", arrayOf(packageName))
+                db.execSQL(
+                    """
+                    INSERT OR REPLACE INTO $TABLE_FLAGS ($COL_PACKAGE_NAME, $COL_VERSION, $COL_FLAG_TYPE, $COL_PARTITION_ID,
+                        $COL_USER, $COL_NAME, $COL_INT_VAL, $COL_BOOL_VAL, $COL_FLOAT_VAL, $COL_STRING_VAL, $COL_EXTENSION_VAL, $COL_COMMITTED)
+                    SELECT $COL_PACKAGE_NAME, $COL_VERSION, $COL_FLAG_TYPE, $COL_PARTITION_ID,
+                        $COL_USER, $COL_NAME, $COL_INT_VAL, $COL_BOOL_VAL, $COL_FLOAT_VAL, $COL_STRING_VAL, $COL_EXTENSION_VAL, 1
+                    FROM $TABLE_FLAGS WHERE $COL_PACKAGE_NAME = ? AND $COL_VERSION = ? AND $COL_USER = '' AND $COL_COMMITTED = 0
+                """.trimIndent(), arrayOf(packageName, token.version.toString())
+                )
+            } else {
+                db.delete(TABLE_FLAGS, "$COL_PACKAGE_NAME = ? AND $COL_USER = ? AND $COL_COMMITTED = 1", arrayOf(packageName, token.user))
+                db.execSQL(
+                    """
+                    INSERT OR REPLACE INTO $TABLE_FLAGS ($COL_PACKAGE_NAME, $COL_VERSION, $COL_FLAG_TYPE, $COL_PARTITION_ID,
+                        $COL_USER, $COL_NAME, $COL_INT_VAL, $COL_BOOL_VAL, $COL_FLOAT_VAL, $COL_STRING_VAL, $COL_EXTENSION_VAL, $COL_COMMITTED)
+                    SELECT $COL_PACKAGE_NAME, $COL_VERSION, $COL_FLAG_TYPE, $COL_PARTITION_ID,
+                        $COL_USER, $COL_NAME, $COL_INT_VAL, $COL_BOOL_VAL, $COL_FLOAT_VAL, $COL_STRING_VAL, $COL_EXTENSION_VAL, 1
+                    FROM $TABLE_FLAGS WHERE $COL_PACKAGE_NAME = ? AND $COL_VERSION = ? AND $COL_USER = ? AND $COL_COMMITTED = 0
+                """.trimIndent(), arrayOf(packageName, token.version.toString(), token.user)
+                )
+            }
+            db.delete(TABLE_FLAG_OVERRIDES, "$COL_PACKAGE_NAME = ? AND $COL_USER = ? AND $COL_COMMITTED = 1", arrayOf(packageName, token.user))
             for (flag in overrides) {
                 db.insertWithOnConflict(
                     TABLE_FLAG_OVERRIDES, null, overrideValues(packageName, token.user, flag, 1),
@@ -2066,33 +2101,63 @@ internal class PhenotypeDatabase(private val storageContext: Context) : SQLiteOp
                 ).also { check(it != -1L) { "Committed override write failed" } }
             }
             if (overrides.isEmpty()) {
-                db.delete(TABLE_CROSS_TOKENS, "fromPackageName = ? AND isCommitted = 1", arrayOf(packageName))
+                val crossTokensDeleteWhere = if (token.user.isEmpty()) "fromPackageName = ? AND fromUser = '' AND isCommitted = 1"
+                else "fromPackageName = ? AND fromUser = ? AND isCommitted = 1"
+                val crossTokensArgs = if (token.user.isEmpty()) arrayOf(packageName) else arrayOf(packageName, token.user)
+                db.delete(TABLE_CROSS_TOKENS, crossTokensDeleteWhere, crossTokensArgs)
                 db.execSQL(
                     """
                     INSERT INTO $TABLE_CROSS_TOKENS (fromPackageName, fromVersion, fromUser, toPackageName,
                         toVersion, isCommitted, token, provenance)
                     SELECT fromPackageName, fromVersion, fromUser, toPackageName, toVersion, 1, token, provenance
-                    FROM $TABLE_CROSS_TOKENS WHERE fromPackageName = ? AND fromVersion = ? AND (fromUser = ? OR fromUser = '') AND isCommitted = 0
-                """.trimIndent(), args
+                    FROM $TABLE_CROSS_TOKENS WHERE fromPackageName = ? AND fromVersion = ? AND fromUser = ? AND isCommitted = 0
+                """.trimIndent(), arrayOf(packageName, token.version.toString(), token.user)
                 )
-                db.delete(TABLE_EXPERIMENT_TOKENS, "$COL_PACKAGE_NAME = ? AND $COL_IS_COMMITTED = 1", arrayOf(packageName))
-                db.execSQL(
-                    """
-                    INSERT OR REPLACE INTO $TABLE_EXPERIMENT_TOKENS ($COL_PACKAGE_NAME, $COL_VERSION, $COL_USER, $COL_IS_COMMITTED,
-                        $COL_EXPERIMENT_TOKEN, $COL_SERVER_TOKEN, $COL_CONFIG_HASH, $COL_SERVING_VERSION, $COL_TOKENS_TAG, $COL_FLAGS_HASH)
-                    SELECT $COL_PACKAGE_NAME, $COL_VERSION, $COL_USER, 1,
-                        $COL_EXPERIMENT_TOKEN, $COL_SERVER_TOKEN, $COL_CONFIG_HASH, $COL_SERVING_VERSION, $COL_TOKENS_TAG, $COL_FLAGS_HASH
-                    FROM $TABLE_EXPERIMENT_TOKENS
-                    WHERE $COL_PACKAGE_NAME = ? AND $COL_VERSION = ? AND ($COL_USER = ? OR $COL_USER = '') AND $COL_IS_COMMITTED = 0
-                """.trimIndent(), args
-                )
+                if (token.user.isEmpty()) {
+                    db.delete(TABLE_EXPERIMENT_TOKENS, "$COL_PACKAGE_NAME = ? AND $COL_USER = '' AND $COL_IS_COMMITTED = 1", arrayOf(packageName))
+                    db.execSQL(
+                        """
+                        INSERT OR REPLACE INTO $TABLE_EXPERIMENT_TOKENS ($COL_PACKAGE_NAME, $COL_VERSION, $COL_USER, $COL_IS_COMMITTED,
+                            $COL_EXPERIMENT_TOKEN, $COL_SERVER_TOKEN, $COL_CONFIG_HASH, $COL_SERVING_VERSION, $COL_TOKENS_TAG, $COL_FLAGS_HASH)
+                        SELECT $COL_PACKAGE_NAME, $COL_VERSION, $COL_USER, 1,
+                            $COL_EXPERIMENT_TOKEN, $COL_SERVER_TOKEN, $COL_CONFIG_HASH, $COL_SERVING_VERSION, $COL_TOKENS_TAG, $COL_FLAGS_HASH
+                        FROM $TABLE_EXPERIMENT_TOKENS
+                        WHERE $COL_PACKAGE_NAME = ? AND $COL_VERSION = ? AND $COL_USER = '' AND $COL_IS_COMMITTED = 0
+                    """.trimIndent(), arrayOf(packageName, token.version.toString())
+                    )
+                } else {
+                    db.delete(TABLE_EXPERIMENT_TOKENS, "$COL_PACKAGE_NAME = ? AND $COL_USER = ? AND $COL_IS_COMMITTED = 1", arrayOf(packageName, token.user))
+                    db.execSQL(
+                        """
+                        INSERT OR REPLACE INTO $TABLE_EXPERIMENT_TOKENS ($COL_PACKAGE_NAME, $COL_VERSION, $COL_USER, $COL_IS_COMMITTED,
+                            $COL_EXPERIMENT_TOKEN, $COL_SERVER_TOKEN, $COL_CONFIG_HASH, $COL_SERVING_VERSION, $COL_TOKENS_TAG, $COL_FLAGS_HASH)
+                        SELECT $COL_PACKAGE_NAME, $COL_VERSION, $COL_USER, 1,
+                            $COL_EXPERIMENT_TOKEN, $COL_SERVER_TOKEN, $COL_CONFIG_HASH, $COL_SERVING_VERSION, $COL_TOKENS_TAG, $COL_FLAGS_HASH
+                        FROM $TABLE_EXPERIMENT_TOKENS
+                        WHERE $COL_PACKAGE_NAME = ? AND $COL_VERSION = ? AND $COL_USER = ? AND $COL_IS_COMMITTED = 0
+                    """.trimIndent(), arrayOf(packageName, token.version.toString(), token.user)
+                    )
+                }
             }
-            db.delete(TABLE_APPLICATION_STATES, "$COL_PACKAGE_NAME = ?", arrayOf(packageName))
+            db.delete(TABLE_APPLICATION_STATES, "$COL_PACKAGE_NAME = ? AND $COL_USER = ?", arrayOf(packageName, token.user))
             db.insertOrThrow(TABLE_APPLICATION_STATES, null, ContentValues().apply {
                 put(COL_PACKAGE_NAME, packageName)
                 put(COL_USER, token.user)
                 put(COL_VERSION, token.version)
             })
+            val mddPackage = "com.google.android.gms.icing.mdd#$packageName"
+            if (packageExists(mddPackage)) {
+                db.delete(TABLE_FLAGS, "$COL_PACKAGE_NAME = ? AND $COL_COMMITTED = 1", arrayOf(mddPackage))
+                db.execSQL(
+                    """
+                    INSERT OR REPLACE INTO $TABLE_FLAGS ($COL_PACKAGE_NAME, $COL_VERSION, $COL_FLAG_TYPE, $COL_PARTITION_ID,
+                        $COL_USER, $COL_NAME, $COL_INT_VAL, $COL_BOOL_VAL, $COL_FLOAT_VAL, $COL_STRING_VAL, $COL_EXTENSION_VAL, $COL_COMMITTED)
+                    SELECT $COL_PACKAGE_NAME, $COL_VERSION, $COL_FLAG_TYPE, $COL_PARTITION_ID,
+                        $COL_USER, $COL_NAME, $COL_INT_VAL, $COL_BOOL_VAL, $COL_FLOAT_VAL, $COL_STRING_VAL, $COL_EXTENSION_VAL, 1
+                    FROM $TABLE_FLAGS WHERE $COL_PACKAGE_NAME = ? AND $COL_COMMITTED = 0
+                """.trimIndent(), arrayOf(mddPackage)
+                )
+            }
             if (token.isPhixitToken) {
                 db.update(
                     TABLE_EXPERIMENT_STATES, ContentValues().apply { put(COL_COMMITTED, 0) },
@@ -2138,14 +2203,15 @@ internal class PhenotypeDatabase(private val storageContext: Context) : SQLiteOp
             val baseFlags = if (user.isNotEmpty()) getFlags(packageName, version, "") else emptyList()
             val userFlags = getFlags(packageName, version, user)
             val overrides = getFlagOverrides(packageName, user)
-            val current = mergeFlags(baseFlags + userFlags, overrides)
+            val mddFlags = getMddBridgedFlags(packageName)
+            val current = mergeFlags(baseFlags + userFlags + mddFlags, overrides)
             val metadata = snapshotMetadata(
                 packageName, user, version, token?.configHash.orEmpty(),
                 baseSnapshotToken, overrides.isNotEmpty()
             )
             val tokens = tokensWithOverrides(token, overrides)
             if (metadata.delta) {
-                val committed = getCommittedConfiguration(packageName)!!.field4.orEmpty()
+                val committed = getCommittedConfiguration(packageName, user)?.field4.orEmpty()
                     .flatMap { it.flags.orEmpty().toList() }
                 val old = mergeFlags(committed, emptyList())
                 val changed = current.filter { (key, flag) -> old[key]?.let { !flagsEqual(flag, it) } ?: true }.values

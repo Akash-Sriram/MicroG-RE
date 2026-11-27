@@ -71,8 +71,12 @@ public class ConfigurationProvider extends ContentProvider {
         String namespace = separator < 0 ? packageName : packageName.substring(0, separator);
         String owner = separator < 0 ? "" : packageName.substring(separator + 1);
 
+        String targetCaller = org.microg.gms.phenotype.ExtensionsKt.resolveTargetGooglePackage(caller == null ? "" : caller, context);
+        boolean isAuthorizedMod = targetCaller.equals(namespace) || targetCaller.equals(owner);
+
         if (Binder.getCallingUid() != Process.myUid()
                 && !PackageUtils.callerHasGooglePackagePermission(context, GooglePackagePermission.APP_CERT)
+                && !isAuthorizedMod
                 && (!database.allowsThirdPartyNamespace(namespace) || !Objects.equals(owner, caller))) return null;
 
         String account = null;
@@ -86,7 +90,7 @@ public class ConfigurationProvider extends ContentProvider {
         }
         Configurations configurations;
         if (account == null) {
-            configurations = database.getCommittedConfiguration(packageName);
+            configurations = database.getCommittedConfiguration(packageName, "");
         } else {
             if (!unlocked) {
                 throw new IllegalArgumentException("Phenotype commitOnQuery cannot be used in direct boot mode");
