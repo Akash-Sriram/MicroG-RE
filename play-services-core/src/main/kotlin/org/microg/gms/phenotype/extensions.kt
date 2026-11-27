@@ -110,9 +110,12 @@ internal fun isModdedGooglePackage(packageName: String): Boolean {
 
 internal fun resolveTargetGooglePackage(packageName: String, context: Context? = null): String {
     if (context != null) {
-        val spoofed = PackageSpoofUtils.spoofPackageName(context.packageManager, packageName)
-        if (!spoofed.isNullOrEmpty() && spoofed != packageName) {
-            return spoofed
+        try {
+            val spoofed = PackageSpoofUtils.spoofPackageName(context.packageManager, packageName)
+            if (!spoofed.isNullOrEmpty() && spoofed != packageName) {
+                return spoofed
+            }
+        } catch (_: Throwable) {
         }
     }
     if (packageName.startsWith("app.morphe.android.vending") ||
