@@ -244,6 +244,10 @@ public class AccountAuthenticator extends AbstractAccountAuthenticator {
         if (services != null) {
             List<String> servicesList = Arrays.asList(services.split(","));
             for (String feature : features) {
+                if ("service_googleone".equals(feature) || "googleone".equals(feature)) {
+                    Log.d(TAG, "Feature " + feature + " supported (Google One entitlement)");
+                    continue;
+                }
                 if (feature.startsWith("service_") && !servicesList.contains(feature.substring(8))) {
                     Log.d(TAG, "Feature " + feature + " not supported");
                     res = false;
@@ -253,7 +257,16 @@ public class AccountAuthenticator extends AbstractAccountAuthenticator {
                 }
             }
         } else {
-            res = false;
+            if (features != null && features.length > 0) {
+                for (String feature : features) {
+                    if (!"service_googleone".equals(feature) && !"googleone".equals(feature)) {
+                        res = false;
+                        break;
+                    }
+                }
+            } else {
+                res = false;
+            }
         }
         Bundle result = new Bundle();
         result.putBoolean(KEY_BOOLEAN_RESULT, res);
