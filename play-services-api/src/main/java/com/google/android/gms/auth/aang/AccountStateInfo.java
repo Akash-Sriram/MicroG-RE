@@ -9,21 +9,21 @@ import org.microg.safeparcel.AutoSafeParcelable;
 
 public class AccountStateInfo extends AutoSafeParcelable {
     @Field(1)
-    public String accountName;
+    public String gaiaId;
 
     @Field(2)
     public String accountType;
 
     @Field(3)
-    public String gaiaId;
+    public String accountName;
 
     public AccountStateInfo() {
     }
 
-    public AccountStateInfo(String accountName, String accountType, String gaiaId) {
-        this.accountName = accountName;
-        this.accountType = accountType;
+    public AccountStateInfo(String gaiaId, String accountType, String accountName) {
         this.gaiaId = gaiaId;
+        this.accountType = accountType;
+        this.accountName = accountName;
     }
 
     public static final Creator<AccountStateInfo> CREATOR = new AutoCreator<>(AccountStateInfo.class);

@@ -62,12 +62,18 @@ class GoogleAuthAangServiceImpl(
         callback: IGoogleAuthAangCallbacks?,
         request: AccountStateRequest?
     ) {
-        Log.d(TAG, "syncAccountState called by $callingPackage for account: ${request?.accountName}")
+        val requestedType = request?.accountType?.takeIf { it.isNotEmpty() } ?: AuthConstants.DEFAULT_ACCOUNT_TYPE
+        Log.d(TAG, "syncAccountState called by $callingPackage for accountType: $requestedType")
         try {
             val accountManager = AccountManager.get(context)
-            val accounts = accountManager.getAccountsByType(AuthConstants.DEFAULT_ACCOUNT_TYPE)
+            val accounts = (accountManager.getAccountsByType(requestedType).toList() +
+                    accountManager.getAccountsByType(AuthConstants.DEFAULT_ACCOUNT_TYPE).toList())
+                .distinctBy { it.name }
             val accountList = accounts.map { acc ->
-                AccountStateInfo(acc.name, acc.type, null)
+                val gaiaId = accountManager.getUserData(acc, "GoogleUserId")
+                    ?: accountManager.getUserData(acc, "accountId")
+                    ?: acc.name
+                AccountStateInfo(gaiaId, requestedType, acc.name)
             }
             val result = AccountStateResult(accountList, emptyList())
             callback?.onAccountStateSynced(Status.SUCCESS, result)

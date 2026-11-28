@@ -11,7 +11,7 @@ import java.util.List;
 
 public class AccountStateRequest extends AutoSafeParcelable {
     @Field(1)
-    public String accountName;
+    public String accountType;
 
     @Field(2)
     public List<String> scopes = new ArrayList<>();
@@ -20,10 +20,10 @@ public class AccountStateRequest extends AutoSafeParcelable {
     public List<String> capabilities = new ArrayList<>();
 
     @Field(4)
-    public boolean flag1;
+    public boolean includeRestrictedAccounts;
 
     @Field(5)
-    public boolean flag2;
+    public boolean includeTransientAccounts;
 
     public AccountStateRequest() {
     }
