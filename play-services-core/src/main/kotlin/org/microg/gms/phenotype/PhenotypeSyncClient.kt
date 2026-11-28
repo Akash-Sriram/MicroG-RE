@@ -21,6 +21,8 @@ import java.util.zip.GZIPOutputStream
 import org.microg.gms.profile.Build
 import androidx.core.content.edit
 import com.google.android.gms.BuildConfig
+import org.microg.gms.auth.AuthConstants.DEFAULT_ACCOUNT_TYPE
+import org.microg.gms.auth.AuthConstants.WORK_ACCOUNT_TYPE
 
 internal class PhenotypeSyncClient(private val context: Context) {
 
@@ -35,6 +37,8 @@ internal class PhenotypeSyncClient(private val context: Context) {
         @JvmStatic
         fun accounts(context: Context): List<Account> {
             val types = buildSet {
+                add(DEFAULT_ACCOUNT_TYPE)
+                add(WORK_ACCOUNT_TYPE)
                 if (context.packageManager.hasSystemFeature("cn.google")) add("cn.google")
                 else {
                     add("com.google")
@@ -43,9 +47,12 @@ internal class PhenotypeSyncClient(private val context: Context) {
                 add(BuildConfig.BASE_PACKAGE_NAME)
             }
             return try {
-                AccountManager.get(context).accounts.filter { it.type in types }.distinctBy { it.name }
-            } catch (_: SecurityException) {
-                Log.w(TAG, "Device accounts are unavailable")
+                AccountManager.get(context).accounts
+                    .filter { it.type in types }
+                    .sortedBy { if (it.type == DEFAULT_ACCOUNT_TYPE || it.type == BuildConfig.BASE_PACKAGE_NAME) 0 else 1 }
+                    .distinctBy { it.name }
+            } catch (e: SecurityException) {
+                Log.w(TAG, "Device accounts are unavailable", e)
                 emptyList()
             }
         }
@@ -83,15 +90,17 @@ internal class PhenotypeSyncClient(private val context: Context) {
             if (name.isEmpty()) continue
             val account = available.find { it.name == name }
             val token = if (account == null) null else try {
-                manager.blockingGetAuthToken(account, AUTH_SCOPE, false)
-            } catch (_: IOException) {
-                Log.w(TAG, "Account credential temporarily unavailable")
+                manager.blockingGetAuthToken(account, AUTH_SCOPE, false)?.also {
+                    Log.d(TAG, "Account credential retrieved for ${account.name} (type=${account.type})")
+                }
+            } catch (e: IOException) {
+                Log.w(TAG, "Account credential temporarily unavailable (${account.name}, type=${account.type}): ${e.message}")
                 null
-            } catch (_: AuthenticatorException) {
-                Log.w(TAG, "Account credential unavailable")
+            } catch (e: AuthenticatorException) {
+                Log.w(TAG, "Account credential unavailable (${account.name}, type=${account.type}): ${e.message}")
                 null
-            } catch (_: OperationCanceledException) {
-                Log.w(TAG, "Account credential request canceled")
+            } catch (e: OperationCanceledException) {
+                Log.w(TAG, "Account credential request canceled (${account.name}, type=${account.type}): ${e.message}")
                 null
             }
             if (token.isNullOrEmpty()) unavailable++ else credentials[requireNotNull(account)] = token

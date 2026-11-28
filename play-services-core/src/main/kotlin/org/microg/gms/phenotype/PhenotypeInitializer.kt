@@ -94,7 +94,10 @@ class PhenotypePackageWorker(context: Context, parameters: WorkerParameters) : C
         try {
             val packageName = inputData.getString(PACKAGE)
             when (inputData.getString(ACTION)) {
-                null, Intent.ACTION_BOOT_COMPLETED -> PhenotypeRegistrar.registerAll(applicationContext)
+                null, Intent.ACTION_BOOT_COMPLETED -> {
+                    PhenotypeRegistrar.registerAll(applicationContext)
+                    PhenotypeSyncDebouncer.trigger(applicationContext, FetchReason.PERIODIC)
+                }
                 Intent.ACTION_MY_PACKAGE_REPLACED -> {
                     PhenotypeRegistrar.registerAll(applicationContext)
                     PhenotypeDatabase.getInstance(applicationContext)
