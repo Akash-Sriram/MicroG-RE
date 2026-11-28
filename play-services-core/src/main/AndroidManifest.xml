@@ -1637,7 +1637,6 @@
                 <action android:name="${basePackageName}.android.gms.herrevad.services.LightweightNetworkQualityAndroidService.START" />
                 <action android:name="com.google.android.gms.identity.service.BIND" />
                 <action android:name="${basePackageName}.android.gms.identity.service.BIND" />
-                <action android:name="${basePackageName}.android.gms.inappreach.service.START" />
                 <action android:name="${basePackageName}.android.gms.instantapps.START" />
                 <action android:name="${basePackageName}.android.gms.kids.service.START" />
                 <action android:name="${basePackageName}.android.gms.learning.internal.dynamitesupport.START" />
@@ -1747,6 +1746,33 @@
             <intent-filter>
                 <action android:name="com.google.android.gms.mdisync.service.START" />
                 <action android:name="${basePackageName}.android.mdisync.service.START" />
+            </intent-filter>
+        </service>
+
+        <service
+            android:name="org.microg.gms.inappreach.InAppReachService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.gms.inappreach.service.START" />
+                <action android:name="${basePackageName}.android.gms.inappreach.service.START" />
+            </intent-filter>
+        </service>
+
+        <service
+            android:name="org.microg.gms.auth.aang.GoogleAuthAangService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.gms.auth.aang.events.services.START" />
+                <action android:name="${basePackageName}.android.gms.auth.aang.events.services.START" />
+            </intent-filter>
+        </service>
+
+        <service
+            android:name="org.microg.gms.gcm.CloudMessagingService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.gms.cloudmessaging.service.START" />
+                <action android:name="${basePackageName}.android.gms.cloudmessaging.service.START" />
             </intent-filter>
         </service>
         <!-- // RE changes end -->
